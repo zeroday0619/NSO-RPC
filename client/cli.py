@@ -33,7 +33,7 @@ class Discord():
             self.rpc = None
             return False
         fails = 0
-        while True:
+        while 1:
             # Attempt to connect to Discord. Will wait until it connects
             try:
                 self.rpc.connect()
@@ -56,9 +56,14 @@ class Discord():
         self.app = function
         self.gui = True
 
+    def updatePresence(self):
+        self.api.getFriends()
+
+
     def update(self):
         for i in range(2):
             try:
+                self.updatePresence()
                 self.api.getSelf()
                 break
             except Exception as e:
@@ -70,24 +75,31 @@ class Discord():
         self.nickname = self.api.userInfo['nickname']
         self.user = self.api.user
 
-        presence = self.user.presence
-        if self.rpc:
-            if presence.game.name: # Please file an issue if this happens to fail
-                state = presence.game.sysDescription
-                if not state:
-                    state = 'Played for %s hours or more' % (int(presence.game.totalPlayTime / 60 / 5) * 5)
-                    if presence.game.totalPlayTime / 60 < 5:
-                        state = 'Played for a little while'
-                self.rpc.update(details = presence.game.name, large_image = presence.game.imageUri, large_text = presence.game.name, state = state)
-            else:
-                self.rpc.clear()
-        # Set GUI
-        if self.gui:
-            self.app(self.user)
+        user = None
+        for friend in self.api.friends:
+            if friend.name == "0day0619":
+                _user = friend
+                self.api.user = _user
+
+                presence = _user.presence
+                print(presence.__dict__)
+                if self.rpc:
+                    print(presence.game.__dict__)
+                    if presence.game.name: # Please file an issue if this happens to fail
+                        state = presence.game.sysDescription
+                        if not state:
+                            state = 'Total play time for %s hours or more' % (int(presence.game.totalPlayTime / 60 / 5) * 5)
+                        print(presence.__dict__["game"].__dict__)
+                        self.rpc.update(details = presence.game.name, large_image = presence.game.imageUri, large_text = presence.game.name, state = state)
+                    else:
+                        self.rpc.clear()
+                # Set GUI
+                if self.gui:
+                    self.app(_user)
 
     def background(self):
         second = 30
-        while True:
+        while 1:
             if self.running:
                 if second == 30:
                     try:

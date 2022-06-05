@@ -11,10 +11,24 @@ import os
 import hashlib
 import re
 import pickle
+import logging
+from bs4 import BeautifulSoup
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+
+def GET_NSO_APP_VERSION():
+    page = requests.get("https://apps.apple.com/us/app/nintendo-switch-online/id1234806557")
+    soup = BeautifulSoup(page.text, 'html.parser')
+    elt = soup.find("p", {"class": "whats-new__latest__version"})
+    ver = elt.get_text().replace("Version ","").strip()
+    return ver
+
 
 client_id = '71b963c1b7b6d119'
-version = 0.2
-nsoAppVersion = '2.0.0'
+version = "unknown"
+nsoAppVersion = "2.1.1"
 languages = [ # ISO Language codes
 'en-US',
 'es-MX',
@@ -26,7 +40,8 @@ languages = [ # ISO Language codes
 'de-DE',
 'it-IT',
 'nl-NL',
-'ru-RU'
+'ru-RU',
+'ko-KR',
 ]
 
 def log(info, time = time.time()):
@@ -40,7 +55,7 @@ def log(info, time = time.time()):
 class API():
     def __init__(self, session_token, user_lang):
         self.headers = {
-            'X-ProductVersion': '2.0.0',
+            'X-ProductVersion': '2.1.1',
             'X-Platform': 'iOS',
             'User-Agent': 'Coral/2.0.0 (com.nintendo.znca; build:1489; iOS 15.3.1) Alamofire/5.4.4',
             'Accept': 'application/json',
@@ -101,7 +116,8 @@ class API():
         route = '/v3/User/ShowSelf'
 
         response = self.makeRequest(route)
-        self.user = User(json.loads(response.text)['result'])
+        logger.info(response.json())
+        self.user = User(response.json()['result'])
 
     def getFriends(self):
         list = FriendList()
@@ -127,7 +143,7 @@ class Nintendo():
     def getServiceToken(self):
         route = '/connect/1.0.0/api/token'
         response = requests.post(self.url + route, headers = self.headers, json = self.body)
-        return json.loads(response.text)
+        return response.json()
 
 class UsersMe():
     def __init__(self, accessToken, userLang):
@@ -146,7 +162,9 @@ class UsersMe():
         route = '/2.0.0/users/me'
 
         response = requests.get(self.url + route, headers = self.headers)
-        return json.loads(response.text)
+        logger.info(response.json())
+        return response.json()
+
 
 class s2s():
     def __init__(self, id_token, timestamp):
@@ -164,7 +182,7 @@ class s2s():
     def getHash(self):
         route = '/s2s/api/gen2'
         response = requests.post(self.url + route, headers = self.headers, data = self.body)
-        return json.loads(response.text)['hash']
+        return response.json()['hash']
 
 class Flapg():
     def __init__(self, id_token, timestamp, guid):
@@ -183,16 +201,17 @@ class Flapg():
         route = '/ika2/api/login?public'
 
         response = requests.get(self.url + route, headers = self.headers)
-        return json.loads(response.text)['result']
+        logger.info(response.json())
+        return response.json()['result']
 
 class Login():
     def __init__(self, userInfo, userLang, accessToken, guid):
         self.headers = {
             'Host': 'api-lp1.znc.srv.nintendo.net',
             'Accept-Language': userLang,
-            'User-Agent': 'com.nintendo.znca/' + nsoAppVersion + ' (Android/7.1.2)',
+            'User-Agent': 'com.nintendo.znca/' + nsoAppVersion + ' (Android/12.1.2)',
             'Accept': 'application/json',
-            'X-ProductVersion': '2.0.0',
+            'X-ProductVersion': '2.1.1',
             'Content-Type': 'application/json; charset=utf-8',
             'Connection': 'Keep-Alive',
             'Authorization': 'Bearer',
@@ -225,7 +244,8 @@ class Login():
             },
         }
         response = requests.post(self.url + route, headers = self.headers, json = body)
-        self.account = json.loads(response.text)
+        self.account = response.json()
+        print(self.account)
         return self.account
 
 class User():
@@ -272,15 +292,30 @@ class FriendList():
 
     def populateList(self, API:API):
         response = API.makeRequest(self.route)
-        arr = json.loads(response.text)['result']['friends']
+        arr = response.json()
+        print(arr)
+        if arr is None:
+            return
+        arr = arr["result"]["friends"]
         self.friendList = [ Friend(friend) for friend in arr ]
+    
+    def my_presence(self):
+        for friend in self.friendList:
+            if friend.name == "0day0619":
+                return friend.presence
+        return None
 
 class Presence():
     def __init__(self, f):
+        logger.debug('Initializing Presence')
         self.state = f.get('state')
         self.updatedAt = f.get('updatedAt')
         self.logoutAt = f.get('logoutAt')
         self.game = Game(f.get('game'))
+        logger.info('Status: %s' % self.state)
+        logger.info('Last Updated: %s' % self.updatedAt)
+        logger.info('Logout: %s' % self.logoutAt)
+        logger.info('Game: %s' % self.game.description())
 
     def description(self):
         return ('%s (updatedAt: %s, logoutAt: %s)\n' % (self.state, self.updatedAt, self.logoutAt)
@@ -289,12 +324,19 @@ class Presence():
 
 class Game():
     def __init__(self, f):
+        logger.debug('Initializing Game')
+        logger.debug(f)
         self.name = f.get('name')
         self.imageUri = f.get('imageUri')
         self.shopUri = f.get('shopUri')
         self.totalPlayTime = f.get('totalPlayTime')
         self.firstPlayedAt = f.get('firstPlayedAt')
         self.sysDescription = f.get('sysDescription')
+        logger.info('Game: %s' % self.name)
+        logger.info('Total Play Time: %s' % self.totalPlayTime)
+        logger.info('First Played: %s' % self.firstPlayedAt)
+        logger.info('System Description: %s' % self.sysDescription)
+
 
     def description(self):
         return ('%s (sysDescription: %s)\n' % (self.name, self.sysDescription)
@@ -358,4 +400,4 @@ class Session():
             'session_token_code_verifier': verify.replace(b'=', b''),
         }
         response = self.Session.post(url, data = body, headers = headers)
-        return json.loads(response.text)['session_token']
+        return response.json()['session_token']

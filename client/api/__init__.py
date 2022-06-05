@@ -5,7 +5,6 @@ import json
 import uuid
 import time
 import sys
-import webbrowser
 import base64
 import os
 import hashlib
@@ -374,7 +373,7 @@ class Session():
         }
         response = self.Session.get(url, headers = self.headers, params = params)
 
-        webbrowser.open(response.history[0].url)
+        print(response.history[0].url)
         tokenPattern = re.compile(r'(eyJhbGciOiJIUzI1NiJ9\.[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]*)')
         code = tokenPattern.findall(receiveInput())[0]
 
